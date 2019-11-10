@@ -1,0 +1,55 @@
+-- Ejercicio inventado --
+-- En la tabla tarifas no pueden repetirse las foreign keys 
+create or replace package Tarifas
+as 
+type TTarifas is Record
+(
+	CodigoTipoHabitacion	tarifas.codigotipohabitacion%type;
+	CodigoTemporada			tarifas.codigotemporada%type;
+	CodigoRegimen			tarifas.codigoregimen%type;
+);
+type tTablaTarifas is table of TTarifas index by BINARY_INTEGER;
+v_tablaTarifas	tTablaTarifas;
+end Tarifas;
+/
+
+create or replace trigger PorSentencia
+before insert or update on Tarifas
+declare
+	cursor c_tarifas
+	is
+	select codigo,codigotipohabitacion,codigotemporada,codigoregimen
+	from Tarifas;
+	i 		number:=0;
+	v_codigotipohabitacion		tarifas.codigotipohabitacion%type;
+	v_codigotemporada			tarifas.codigotemporada%type;
+	v_codigoregimen				tarifas.codigoregimen%type;
+begin 
+	open c_tarifas;
+	fetch c_tarifas into v_codigotipohabitacion,v_codigotemporada,v_codigoregimen;
+	while c_tarifas%found loop
+		Tarifas.v_tablaTarifas(i).CodigoTipoHabitacion:=v_codigotipohabitacion;
+		Tarifas.v_tablaTarifas(i).CodigoTemporada:=v_codigotemporada;
+		Tarifas.v_tablaTarifas(i).CodigoRegimen:=v_codigoregimen;
+		i:=i+1;
+		fetch c_tarifas into v_codigotipohabitacion,v_codigotemporada,v_codigoregimen;
+	end loop;
+	close c_tarifas;
+end PorSentencia;
+/
+
+create or replace trigger PorFila
+before insert or update on Tarifas
+for each row
+declare 
+begin
+	for i in Tarifas.v_tablaTarifas.FIRST..Tarifas.v_tablaTarifas.LAST loop
+		if Tarifas.v_tablaTarifas(i).CodigoTipoHabitacion = :new.CodigoTipoHabitacion and Tarifas.v_tablaTarifas(i).CodigoTemporada = :new.CodigoTemporada and Tarifas.v_tablaTarifas(i).CodigoRegimen = :new.CodigoRegimen then
+			raise_application_error(-20015,'No puedes tener la misma tarifa que otro cliente')
+		end if;
+	end loop;
+	Tarifas.v_tablaTarifas(Tarifas.v_tablaTarifas.LAST+1).CodigoTipoHabitacion:=:new.CodigoTipoHabitacion;
+	Tarifas.v_tablaTarifas(Tarifas.v_tablaTarifas.LAST).CodigoTemporada:=:new.CodigoTemporada;
+	Tarifas.v_tablaTarifas(Tarifas.v_tablaTarifas.LAST).CodigoRegimen:=:new.CodigoRegimen;
+end PorFila;
+/
